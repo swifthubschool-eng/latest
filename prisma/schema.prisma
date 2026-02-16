@@ -1,0 +1,122 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified DateTime? @map("email_verified")
+  password      String
+  image         String?
+  
+  // OAuth fields
+  provider      String?   // "google", "github", "credentials"
+  providerId    String?   @map("provider_id")
+  
+  // Profile fields
+  phone         String?
+  bio           String?
+  
+  // Portfolio tracking
+  balance       Float     @default(0)
+  investedAmount Float    @default(0) @map("invested_amount")
+  
+  // Preferences
+  currency      String    @default("INR")
+  theme         String    @default("dark")
+  
+  // Account status
+  isActive      Boolean   @default(true) @map("is_active")
+  isVerified    Boolean   @default(false) @map("is_verified")
+  
+  // Timestamps
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  lastLoginAt   DateTime? @map("last_login_at")
+  
+  // Relations
+  watchlists    Watchlist[]
+  portfolios    Portfolio[]
+  transactions  Transaction[]
+  
+  @@map("users")
+}
+
+model Watchlist {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  stocks    String[] // Array of stock symbols
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("watchlists")
+}
+
+model Portfolio {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  symbol    String   // Stock symbol (e.g., "RELIANCE")
+  quantity  Int
+  avgPrice  Float    @map("avg_price")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, symbol])
+  @@map("portfolios")
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  symbol      String
+  type        String   // "BUY" or "SELL"
+  quantity    Int
+  price       Float
+  totalAmount Float    @map("total_amount")
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("transactions")
+}
+
+model StockFundamental {
+  id               String   @id @default(cuid())
+  symbol           String
+  date             DateTime @default(now()) @db.Date
+  longName         String?   @map("long_name")
+  sector           String?
+  marketCap        Float?    @map("market_cap")
+  peRatio          Float?    @map("pe_ratio")
+  eps              Float?
+  epsForward       Float?    @map("eps_forward")
+  epsGrowth        Float?    @map("eps_growth") // EPS Diluted Growth TTM YoY
+  dividendYield    Float?    @map("dividend_yield")
+  beta             Float?
+  avgVolume10d     Float?    @map("avg_volume_10d")
+  currentPrice     Float?
+  fiftyTwoWeekHigh Float?    @map("fifty_two_week_high")
+  fiftyTwoWeekLow  Float?    @map("fifty_two_week_low")
+  dailyVolume      Float?    @map("daily_volume")
+  lastUpdated      DateTime @default(now()) @map("last_updated")
+
+  @@unique([symbol, date])
+  @@map("stock_fundamentals")
+}
