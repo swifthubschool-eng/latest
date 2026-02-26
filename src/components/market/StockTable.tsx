@@ -28,6 +28,7 @@ type Instrument = {
   name: string;
   instrument_token: number;
   lot_size: number;
+  exchange: string;
 };
 
 type Quote = {
@@ -206,7 +207,7 @@ export function StockTable({ activeFilter = "All stocks" }: { activeFilter?: str
         const quoteTime = quote.timestamp ? new Date(quote.timestamp).getTime() : 0;
         return (now - quoteTime) > CACHE_DURATION; // Stale quote, need to refresh
       })
-      .map(inst => inst.symbol)
+      .map(inst => `${inst.exchange}:${inst.symbol}`) // Use Exchange Prefix
       .filter(sym => sym && sym.trim() !== "");
 
     if (symbolsToFetch.length === 0) return; // All quotes are fresh!

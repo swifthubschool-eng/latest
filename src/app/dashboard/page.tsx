@@ -8,6 +8,7 @@ import { MarketSummary } from "@/components/dashboard/MarketSummary";
 import { SearchBar } from "@/components/layout/SearchBar";
 import { ArrowUpRight, ArrowDownRight, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BulkDownload } from "@/components/screener/BulkDownload";
 
 
 
@@ -60,9 +61,11 @@ export default function DashboardPage() {
             </h1>
             <p className="text-muted-foreground mt-1">Here's your market overview for today.</p>
           </div>
-          <button className="px-4 py-2 border border-border hover:bg-muted text-foreground rounded-lg font-medium transition-colors">
-            Market Report
-          </button>
+          <div className="flex items-center gap-3">
+            <button className="px-4 py-2 border border-border hover:bg-muted text-foreground rounded-lg font-medium transition-colors">
+              Market Report
+            </button>
+          </div>
         </section>
 
         {/* Mobile Search Bar (Only visible on mobile/tablet) */}
@@ -86,9 +89,13 @@ export default function DashboardPage() {
             <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-blue-500" /> Market Trends
             </h2>
-            <button className="text-sm text-blue-400 hover:text-blue-300">View All Markets</button>
           </div>
           <StockCarousel />
+        </section>
+
+        {/* Bulk CSV Download */}
+        <section>
+          <BulkDownload />
         </section>
       </main>
     </div>

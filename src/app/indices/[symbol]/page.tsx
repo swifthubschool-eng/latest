@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, ArrowDownRight, Activity } from "lucide-react";
 import { StockChart } from "@/components/stock/StockChart";
 import { StockPerformance } from "@/components/stock/StockPerformance";
@@ -144,13 +145,14 @@ export default function IndexDetailsPage() {
 
         {/* Header / Back */}
         <div className="flex items-center gap-4 mb-6">
-          <Button
-            onClick={() => router.back()}
-            variant="ghost"
-            className="text-muted-foreground hover:text-foreground hover:bg-muted p-2"
-          >
-            <ArrowLeft className="h-6 w-6" />
-          </Button>
+          <Link href="/dashboard">
+            <Button
+              variant="ghost"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted p-2"
+            >
+              <ArrowLeft className="h-6 w-6" />
+            </Button>
+          </Link>
           <div className="flex flex-col">
             <h1 className="text-xl md:text-2xl font-bold text-foreground">{symbol}</h1>
             <span className="text-sm text-muted-foreground">Index Overview</span>

@@ -22,7 +22,7 @@ export function StockChart({ symbol, stockData }: StockChartProps) {
       // They will now fetch from /api/stocks/[symbol]/historical
 
       try {
-        const res = await fetch(`/api/stocks/${symbol}/historical?range=${range}`);
+        const res = await fetch(`/api/stocks/${encodeURIComponent(symbol)}/historical?range=${range}`);
 
         // If API returns 404 or error, handle gracefully
         if (!res.ok) {
@@ -140,42 +140,54 @@ export function StockChart({ symbol, stockData }: StockChartProps) {
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={historicalData}>
+            <AreaChart data={historicalData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id={chartId} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={displayChange >= 0 ? "#22c55e" : "#ef4444"} stopOpacity={0.5} />
-                  <stop offset="95%" stopColor={displayChange >= 0 ? "#22c55e" : "#ef4444"} stopOpacity={0.1} />
+                  <stop offset="0%" stopColor={displayChange >= 0 ? "#22c55e" : "#ef4444"} stopOpacity={0.4} />
+                  <stop offset="100%" stopColor={displayChange >= 0 ? "#22c55e" : "#ef4444"} stopOpacity={0.0} />
                 </linearGradient>
               </defs>
               <XAxis
                 dataKey="time"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: '#6b7280', fontSize: 12 }}
-                minTickGap={30}
-                dy={10}
+                tick={{ fill: '#6b7280', fontSize: 11, fontWeight: 500 }}
+                minTickGap={40}
+                dy={12}
               />
               <YAxis
                 hide
-                domain={['dataMin', 'dataMax']}
+                domain={[
+                  (dataMin: number) => dataMin - (dataMin * 0.001),
+                  (dataMax: number) => dataMax + (dataMax * 0.001)
+                ]}
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: 'none',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  backgroundColor: 'hsl(var(--card))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '12px',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
+                  padding: '8px 12px'
                 }}
-                itemStyle={{ color: '#fff' }}
-                formatter={(value: any) => [`₹${Number(value).toFixed(2)}`, 'Price']}
-                labelStyle={{ color: '#9ca3af' }}
+                itemStyle={{ color: 'hsl(var(--foreground))', fontWeight: 600 }}
+                formatter={(value: any) => [`₹${Number(value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 'Price']}
+                labelStyle={{ color: 'hsl(var(--muted-foreground))', fontSize: '12px', marginBottom: '4px' }}
+                cursor={{ stroke: 'hsl(var(--border))', strokeWidth: 1.5, strokeDasharray: '4 4' }}
               />
               <Area
                 type="monotone"
                 dataKey="price"
                 stroke={displayChange >= 0 ? "#22c55e" : "#ef4444"}
-                strokeWidth={3}
+                strokeWidth={2}
+                fillOpacity={1}
                 fill={`url(#${chartId})`}
+                activeDot={{
+                  r: 5,
+                  fill: displayChange >= 0 ? "#22c55e" : "#ef4444",
+                  stroke: "hsl(var(--background))",
+                  strokeWidth: 2
+                }}
               />
             </AreaChart>
           </ResponsiveContainer>

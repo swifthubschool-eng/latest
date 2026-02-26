@@ -1,10 +1,14 @@
-
-import { kite } from "@/lib/kite";
 import { NextResponse } from "next/server";
 
+// This route is disabled in production — only usable in development
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Not available in production" }, { status: 403 });
+  }
+
+  const { kite } = await import("@/lib/kite");
   const symbols = ["NSE:AARTISURF-P1", "NSE:AAREYDRUGS", "NSE:ABDL", "NSE:AGNI-SM"];
 
   try {
@@ -25,7 +29,7 @@ export async function GET() {
         ohlc_open: q.ohlc.open,
         calc_change: calcChange,
         calc_percent: calcPercent,
-        api_change_percent: q.change_percent
+        api_change_percent: q.change_percent,
       };
     });
 

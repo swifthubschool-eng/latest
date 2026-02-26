@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchStockQuotes, StockQuote } from "@/lib/stock-api";
+import Link from "next/link";
 
 // Initial stocks for SSR/loading state
 const INITIAL_STOCKS: StockQuote[] = [
@@ -156,7 +157,8 @@ export function StockCarousel() {
           const isFeatured = stock.symbol === "RELIANCE" || stock.symbol === "TCS";
 
           return (
-            <div
+            <Link
+              href={`/stock/${encodeURIComponent(stock.symbol)}`}
               key={`${stock.symbol}-${index}`}
               className={cn(
                 "group relative flex h-72 w-80 flex-shrink-0 flex-col justify-between rounded-[2.5rem] border border-border bg-card p-8 backdrop-blur-2xl transition-all duration-500 hover:-translate-y-3 hover:border-border/50 hover:shadow-2xl",
@@ -221,7 +223,7 @@ export function StockCarousel() {
                   isPositive ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" : "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]"
                 )} />
               </div>
-            </div>
+            </Link>
           );
         })}
       </div>

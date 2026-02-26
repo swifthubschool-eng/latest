@@ -1,7 +1,7 @@
-import TradingViewWidget from "@/components/stock/TradingViewWidget";
-import { Button } from "@/components/ui/button";
-import { ChevronLeft } from "lucide-react";
+import { ChartTerminal } from "@/components/terminal/ChartTerminal";
+import { fetchInstruments } from "@/lib/instruments";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 interface PageProps {
   params: {
@@ -12,26 +12,29 @@ interface PageProps {
 export default async function TerminalPage({ params }: PageProps) {
   const { symbol } = await params;
 
-  // Clean symbol (remove exchange prefix if present in URL, though usually it's just symbol)
+  // Clean symbol
   const cleanSymbol = decodeURIComponent(symbol).toUpperCase();
 
-  return (
-    <div className="h-screen w-screen bg-background flex flex-col overflow-hidden">
-      <header className="h-14 border-b border-border flex items-center px-4 justify-between bg-card text-card-foreground">
-        <div className="flex items-center gap-4">
-          <Link href={`/stock/${cleanSymbol}`}>
-            <Button variant="ghost" size="sm" className="gap-2">
-              <ChevronLeft className="h-4 w-4" />
-              Back to Overview
-            </Button>
+  // Find Instrument Token
+  const instruments = await fetchInstruments();
+  const instrument = instruments.find((i: any) => i.symbol === cleanSymbol);
+
+  if (!instrument) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-[#131722] text-white">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-2">Instrument Not Found</h1>
+          <p className="text-gray-400">Could not find token for {cleanSymbol}</p>
+          <Link href="/dashboard">
+            <Button variant="outline" className="mt-4 text-black bg-white hover:bg-gray-200">Back to Market</Button>
           </Link>
-          <div className="h-6 w-px bg-border" />
-          <h1 className="font-semibold text-lg">{cleanSymbol} Terminal</h1>
         </div>
-      </header>
-      <main className="flex-1 relative">
-        <TradingViewWidget symbol={cleanSymbol} />
-      </main>
-    </div>
+      </div>
+    );
+  }
+
+  // Render the modular Chart Terminal which handles layout internally
+  return (
+    <ChartTerminal symbol={cleanSymbol} instrumentToken={instrument.instrument_token} />
   );
 }

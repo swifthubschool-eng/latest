@@ -1,8 +1,14 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
-const JWT_EXPIRES_IN = "7d"; // Token expires in 7 days
+const WEAK_DEFAULT = "your-secret-key-change-in-production";
+const JWT_SECRET = process.env.JWT_SECRET || WEAK_DEFAULT;
+const JWT_EXPIRES_IN = "7d";
+
+// Hard-fail in production if JWT_SECRET is using the insecure default
+if (process.env.NODE_ENV === "production" && JWT_SECRET === WEAK_DEFAULT) {
+  throw new Error("JWT_SECRET environment variable must be set in production!");
+}
 
 export interface JWTPayload {
   userId: string;

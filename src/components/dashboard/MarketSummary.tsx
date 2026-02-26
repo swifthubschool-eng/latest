@@ -29,22 +29,16 @@ export function MarketSummary() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch("/api/stocks/NIFTY 50/historical?range=1d");
+        const res = await fetch("/api/stocks/NIFTY%2050/historical?range=1d");
+        if (!res.ok) return;
         const json = await res.json();
-        if (Array.isArray(json)) {
-          // Map API data to Recharts format
+        if (Array.isArray(json) && json.length > 0) {
           const chartData = json.map((item: any) => ({
             time: item.time,
             value: item.price
           }));
           setData(chartData);
-
-          // Set current price and change from the last data point if available
-          if (chartData.length > 0) {
-            const last = chartData[chartData.length - 1];
-            setCurrentPrice(last.value);
-            // We might want to fetch quote for accurate change, but chart last price is a good fallback
-          }
+          setCurrentPrice(chartData[chartData.length - 1].value);
         }
       } catch (err) {
         console.error("Failed to fetch Nifty 50 data", err);
@@ -66,14 +60,27 @@ export function MarketSummary() {
         }
 
         setData(prev => {
-          if (prev.length === 0) return [{ time: "Now", value: update.price }];
-          const newData = [...prev];
-          const lastPoint = { ...newData[newData.length - 1] };
-          lastPoint.value = update.price;
-          // specific logic: if we wanted to add new points for new minutes, we'd compare timestamps.
-          // but for now, updating the last point gives the "live" feel.
-          newData[newData.length - 1] = lastPoint;
-          return newData;
+          // Format current IST time as HH:MM
+          const now = new Date();
+          const timeLabel = now.toLocaleTimeString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            hour: '2-digit', minute: '2-digit', hour12: false
+          });
+
+          const newPoint = { time: timeLabel, value: update.price };
+
+          if (prev.length === 0) return [newPoint];
+
+          // Only add a new point if the time label is different from the last
+          const last = prev[prev.length - 1];
+          if (last.time === timeLabel) {
+            // Same minute — update last point in place
+            return [...prev.slice(0, -1), { ...last, value: update.price }];
+          }
+
+          // New minute — append (cap at 375 points = full trading session)
+          const updated = [...prev, newPoint];
+          return updated.length > 375 ? updated.slice(-375) : updated;
         });
       }
 
@@ -140,41 +147,54 @@ export function MarketSummary() {
         {/* Area Chart */}
         <div className="h-[350px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} onMouseMove={(e: any) => { if (e.activePayload) setHoveredData(e.activePayload[0].payload) }} onMouseLeave={() => setHoveredData(null)}>
+            <AreaChart data={data} margin={{ top: 10, right: 0, left: 0, bottom: 0 }} onMouseMove={(e: any) => { if (e.activePayload) setHoveredData(e.activePayload[0].payload) }} onMouseLeave={() => setHoveredData(null)}>
               <defs>
                 <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={change.value >= 0 ? "#22c55e" : "#ef4444"} stopOpacity={0.5} />
-                  <stop offset="95%" stopColor={change.value >= 0 ? "#22c55e" : "#ef4444"} stopOpacity={0.1} />
+                  <stop offset="0%" stopColor={change.value >= 0 ? "#22c55e" : "#ef4444"} stopOpacity={0.4} />
+                  <stop offset="100%" stopColor={change.value >= 0 ? "#22c55e" : "#ef4444"} stopOpacity={0.0} />
                 </linearGradient>
               </defs>
               <XAxis
                 dataKey="time"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: '#6b7280', fontSize: 12 }}
-                minTickGap={30}
-                dy={10}
+                tick={{ fill: '#6b7280', fontSize: 11, fontWeight: 500 }}
+                minTickGap={40}
+                dy={12}
               />
-              <YAxis hide domain={['dataMin - 50', 'dataMax + 50']} />
+              <YAxis
+                hide
+                domain={[
+                  (dataMin: number) => dataMin - (dataMin * 0.001),
+                  (dataMax: number) => dataMax + (dataMax * 0.001)
+                ]}
+              />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#1f2937',
-                  border: 'none',
-                  borderRadius: '8px',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  backgroundColor: 'hsl(var(--card))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '12px',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
+                  padding: '8px 12px'
                 }}
-                itemStyle={{ color: '#fff' }}
-                labelStyle={{ color: '#9ca3af' }}
-                cursor={{ stroke: 'var(--color-border)', strokeWidth: 1, strokeDasharray: '4 4' }}
-                formatter={(value: any) => [`₹${Number(value).toFixed(2)}`, 'Value']}
+                itemStyle={{ color: 'hsl(var(--foreground))', fontWeight: 600 }}
+                labelStyle={{ color: 'hsl(var(--muted-foreground))', fontSize: '12px', marginBottom: '4px' }}
+                cursor={{ stroke: 'hsl(var(--border))', strokeWidth: 1.5, strokeDasharray: '4 4' }}
+                formatter={(value: any) => [`₹${Number(value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 'Value']}
               />
               <Area
                 type="monotone"
                 dataKey="value"
                 stroke={change.value >= 0 ? "#22c55e" : "#ef4444"}
-                strokeWidth={3}
+                strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#colorValue)"
+                activeDot={{
+                  r: 5,
+                  fill: change.value >= 0 ? "#22c55e" : "#ef4444",
+                  stroke: "hsl(var(--background))",
+                  strokeWidth: 2
+                }}
               />
             </AreaChart>
           </ResponsiveContainer>

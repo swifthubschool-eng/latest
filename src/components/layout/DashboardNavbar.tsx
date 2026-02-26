@@ -63,6 +63,12 @@ export function DashboardNavbar() {
             <div className="flex items-center">
               <MarketsMenu />
             </div>
+            <Link
+              href="/screener"
+              className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              Screener
+            </Link>
           </nav>
         </div>
 

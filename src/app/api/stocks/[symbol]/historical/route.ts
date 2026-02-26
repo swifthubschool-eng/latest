@@ -2,18 +2,61 @@
 import { kite } from "@/lib/kite";
 import { fetchInstruments } from "@/lib/instruments";
 import { NextResponse } from "next/server";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 
-export const dynamic = "force-dynamic"; // Recompile force
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+export const dynamic = "force-dynamic";
+
+// ─── Hardcoded Index Tokens ────────────────────────────────────────────────
+// Indices are in NSE-INDICES segment — not returned by getInstruments("NSE").
+// These tokens are permanent in Zerodha's system.
+const INDEX_TOKENS: Record<string, number> = {
+  "NIFTY 50": 256265,
+  "NIFTY BANK": 260105,
+  "NIFTY FIN SERVICE": 257801,
+  "NIFTY MIDCAP 100": 288009,
+  "NIFTY SMLCAP 100": 9999105,
+  "SENSEX": 265,
+  "NIFTY NEXT 50": 270857,
+};
+
+// ─── IST-safe date helpers ─────────────────────────────────────────────────
+const IST = "Asia/Kolkata";
+const nowIST = () => dayjs().tz(IST);
+
+/** Returns the most recent trading day in IST (skips weekends, pre-market) */
+function getLastTradingDay(): dayjs.Dayjs {
+  const now = nowIST();
+  const timeVal = now.hour() * 60 + now.minute();
+  const marketOpen = 9 * 60 + 15; // 9:15 AM IST
+  const day = now.day(); // 0=Sun, 6=Sat
+
+  let base = now.startOf("day");
+
+  if (day === 0) base = base.subtract(2, "day");       // Sun → Fri
+  else if (day === 6) base = base.subtract(1, "day");  // Sat → Fri
+  else if (timeVal < marketOpen) {
+    // Pre-market today → use yesterday (go back over weekends)
+    if (day === 1) base = base.subtract(3, "day");     // Mon AM → Fri
+    else base = base.subtract(1, "day");
+  }
+
+  return base;
+}
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ symbol: string }> } // Params are now a Promise in Next.js 15+
+  { params }: { params: Promise<{ symbol: string }> }
 ) {
   let symbol = "";
   try {
     const paramsResolved = await params;
     symbol = paramsResolved.symbol;
-    let upperSymbol = symbol.toUpperCase();
+    let upperSymbol = decodeURIComponent(symbol).toUpperCase();
 
     // Map common index aliases to NSE official trading symbols
     if (upperSymbol === "NIFTY") upperSymbol = "NIFTY 50";
@@ -22,171 +65,103 @@ export async function GET(
     if (upperSymbol === "MIDCAP") upperSymbol = "NIFTY MIDCAP 100";
     if (upperSymbol === "SMALLCAP") upperSymbol = "NIFTY SMLCAP 100";
 
-    // 1. Get instrument token
-    const instruments = await fetchInstruments();
-    const instrument = instruments.find((inst: any) => inst.symbol === upperSymbol);
-
-    if (!instrument || !instrument.instrument_token) {
-      return NextResponse.json({ error: "Instrument not found" }, { status: 404 });
+    // 1. Get instrument token — try hardcoded index map first, then instruments list
+    let instrumentToken: number | null = INDEX_TOKENS[upperSymbol] || null;
+    if (!instrumentToken) {
+      const instruments = await fetchInstruments();
+      const instrument = instruments.find((inst: any) => inst.symbol === upperSymbol);
+      if (!instrument || !instrument.instrument_token) {
+        return NextResponse.json({ error: "Instrument not found" }, { status: 404 });
+      }
+      instrumentToken = instrument.instrument_token;
     }
 
-    // 2. Define time range and interval based on query
+    // 2. Build IST-correct date ranges
     const { searchParams } = new URL(request.url);
-    const range = searchParams.get("range") || "1d"; // 1d, 5d, 1mo, 1y, 5y
+    const range = searchParams.get("range") || "1d";
 
-    let fromDate = new Date();
-    let toDate = new Date();
+    const tradingDay = getLastTradingDay();
+    const now = nowIST();
+    let fromDate: dayjs.Dayjs;
+    let toDate: dayjs.Dayjs = now;
     let interval = "minute";
-
-    // Normalize today - Use system time (Vercel uses UTC usually, but Kite accepts standard Date objects)
-    const now = new Date();
 
     switch (range) {
       case "1d": {
-        // Safe IST Time Calculation
-        const getISTParts = (d: Date) => {
-          const formatter = new Intl.DateTimeFormat('en-US', {
-            timeZone: 'Asia/Kolkata',
-            year: 'numeric', month: 'numeric', day: 'numeric',
-            hour: 'numeric', minute: 'numeric', hour12: false
-          });
-          const parts = formatter.formatToParts(d);
-          const get = (t: string) => parseInt(parts.find(p => p.type === t)?.value || "0");
-          return {
-            year: get('year'),
-            month: get('month') - 1, // 0-indexed
-            day: get('day'),
-            hour: get('hour'),
-            minute: get('minute')
-          };
-        };
-
-        const ist = getISTParts(now);
-        const nowTimeVal = ist.hour * 60 + ist.minute;
-        const marketOpenVal = 9 * 60 + 15;
-
-        // Determine current day of week in IST (0=Sun, 1=Mon, ..., 6=Sat)
-        const currentDateIST = new Date(ist.year, ist.month, ist.day);
-        const dayOfWeek = currentDateIST.getDay();
-
-        let targetDate = currentDateIST; // Start with today
-        let daysToSubtract = 0;
-
-        // 1. Weekend Logic
-        if (dayOfWeek === 0) { // Sunday -> Friday
-          daysToSubtract = 2;
-        } else if (dayOfWeek === 6) { // Saturday -> Friday
-          daysToSubtract = 1;
-        }
-        // 2. Pre-Market Logic (Before 9:15 AM IST)
-        else if (nowTimeVal < marketOpenVal) {
-          if (dayOfWeek === 1) { // Mon Morning -> Friday
-            daysToSubtract = 3;
-          } else { // Tue-Fri Morning -> Yesterday
-            daysToSubtract = 1;
-          }
-        }
-
-        if (daysToSubtract > 0) {
-          // Go back N days
-          targetDate = new Date(targetDate.setDate(targetDate.getDate() - daysToSubtract));
-
-          // Re-fetch IST parts for the target date to ensure correct year/month/day boundaries
-          // Actually, Date object handles month rollover.
-          // Using Date.UTC to construct absolute timestamps for 09:15 - 15:30 IST
-
-          // 09:15 IST = 03:45 UTC
-          fromDate = new Date(Date.UTC(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 3, 45, 0));
-
-          // 15:30 IST = 10:00 UTC
-          toDate = new Date(Date.UTC(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 10, 0, 0));
-        } else {
-          // Live Session
-          // From 09:15 IST Today
-          fromDate = new Date(Date.UTC(ist.year, ist.month, ist.day, 3, 45, 0));
-
-          // To NOW (Absolute Time)
-          toDate = now;
-        }
-
+        // From 09:15 IST of the last trading day → now (or 15:30 IST if past session)
+        fromDate = tradingDay.hour(9).minute(15).second(0);
+        const sessionEnd = tradingDay.hour(15).minute(30).second(0);
+        toDate = now.isAfter(sessionEnd) ? sessionEnd : now;
         interval = "minute";
         break;
       }
       case "5d":
-        // 7 days lookback ensures 5 trading days usually
-        fromDate.setDate(now.getDate() - 7);
-        toDate = now; // Ensure 5d chart is also live till now
+        fromDate = now.subtract(7, "day");
         interval = "60minute";
         break;
       case "1m":
-        fromDate.setDate(now.getDate() - 30);
+        fromDate = now.subtract(30, "day");
         interval = "60minute";
         break;
       case "1y":
-        fromDate.setDate(now.getDate() - 365);
+        fromDate = now.subtract(365, "day");
         interval = "day";
         break;
       case "5y":
-        fromDate.setDate(now.getDate() - (5 * 365));
+        fromDate = now.subtract(5 * 365, "day");
         interval = "day";
         break;
       default:
-        // Default to 1d
-        fromDate.setHours(9, 15, 0, 0);
-        toDate.setHours(15, 30, 0, 0);
+        fromDate = tradingDay.hour(9).minute(15).second(0);
         interval = "minute";
     }
 
-    // Kite API expects dates as strings or Date objects.
-    // historical(instrument_token, interval, from_date, to_date)
+    // ⚠️ CRITICAL: Pass IST-formatted strings, NOT JS Date objects.
+    // The kiteconnect library converts Date objects to UTC ISO strings internally,
+    // which sends the WRONG datetime to Kite's API (NSE runs on IST).
+    // Kite's API accepts 'YYYY-MM-DD HH:mm:ss' strings and treats them as IST.
+    const fromStr = fromDate.format("YYYY-MM-DD HH:mm:ss");
+    const toStr = toDate.format("YYYY-MM-DD HH:mm:ss");
 
-    // We casts kite as any because typescript definition might be missing historical method
+    console.log(`[Historical] ${upperSymbol} | range=${range} | from=${fromStr} | to=${toStr} | interval=${interval}`);
+
+    // 3. Fetch candles from Kite
     const historicalResponse: any = await (kite as any).getHistoricalData(
-      instrument.instrument_token,
+      instrumentToken,
       interval,
-      fromDate,
-      toDate
+      fromStr,
+      toStr
     );
 
-    console.log(`[Historical] Symbol: ${symbol}, Token: ${instrument.instrument_token}, Candles: ${Array.isArray(historicalResponse) ? historicalResponse.length : (historicalResponse?.data?.candles?.length || 0)}`);
-
-    // Handle different response structures (sometimes it's directly array, sometimes object)
     const candles = Array.isArray(historicalResponse)
       ? historicalResponse
       : (historicalResponse?.data?.candles || historicalResponse?.candles || []);
 
-    // Format data for the chart
-    // Kite returns: [[date, open, high, low, close, volume], ...]
-    const chartData = candles.map((candle: any) => {
-      // Handle array format [date, open, high, low, close, volume]
-      // Or object format if provided differently (though usually array)
-      const date = new Date(candle[0] || candle.date);
-      const closePrice = candle[4] !== undefined ? candle[4] : candle.close;
-      const openPrice = candle[1] !== undefined ? candle[1] : candle.open;
-      const highPrice = candle[2] !== undefined ? candle[2] : candle.high;
-      const lowPrice = candle[3] !== undefined ? candle[3] : candle.low;
-      const volume = candle[5] !== undefined ? candle[5] : candle.volume;
+    console.log(`[Historical] ${upperSymbol} → ${candles.length} candles`);
 
-      let timeLabel = "";
+    // 4. Format for chart
+    const chartData = candles.map((candle: any) => {
+      const dateIST = dayjs(candle[0] || candle.date).tz(IST);
+      const closePrice = candle[4] !== undefined ? candle[4] : candle.close;
+
+      let timeLabel: string;
       if (range === "1d") {
-        timeLabel = date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+        timeLabel = dateIST.format("HH:mm");
       } else if (range === "5d" || range === "1m") {
-        // Show "DD MMM HH:mm" for medium ranges
-        timeLabel = date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) + " " + date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+        timeLabel = dateIST.format("DD MMM HH:mm");
       } else {
-        // Show "DD MMM YY" for long ranges
-        timeLabel = date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
+        timeLabel = dateIST.format("DD MMM YY");
       }
 
       return {
         time: timeLabel,
-        originalDate: date.toISOString(),
+        originalDate: dateIST.toISOString(),
         price: closePrice,
-        open: openPrice,
-        high: highPrice,
-        low: lowPrice,
+        open: candle[1] !== undefined ? candle[1] : candle.open,
+        high: candle[2] !== undefined ? candle[2] : candle.high,
+        low: candle[3] !== undefined ? candle[3] : candle.low,
         close: closePrice,
-        volume: volume
+        volume: candle[5] !== undefined ? candle[5] : candle.volume,
       };
     });
 

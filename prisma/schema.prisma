@@ -8,9 +8,13 @@ generator client {
   provider = "prisma-client-js"
 }
 
+
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Use pooler URL (port 6543) for runtime queries on Vercel serverless
+  url       = env("DATABASE_URL")
+  // Use direct URL (port 5432) for migrations
+  directUrl = env("DIRECT_URL")
 }
 
 model User {

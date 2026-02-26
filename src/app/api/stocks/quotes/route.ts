@@ -103,7 +103,6 @@ export async function GET(request: NextRequest) {
         // Create a promise for Yahoo Fetching
         const yahooFetchPromise = async () => {
           try {
-            console.log(`[${today.toISOString().split('T')[0]}] Cache Miss. Fetching ${symbolsToFetch.length} from Yahoo:`, symbolsToFetch.slice(0, 3));
             const YFClass = (yahooFinance as any).default || yahooFinance;
             const yf = new YFClass({ suppressNotices: ['yahooSurvey'] });
 
@@ -185,8 +184,8 @@ export async function GET(request: NextRequest) {
                   // Update local map immediately so current request gets data
                   fundamentalMap[sym] = dataToSave;
 
-                } catch (err) {
-                  console.warn(`Unexpected error processing ${sym}:`, err);
+                } catch (_err) {
+                  // Silently skip individual symbol failures
                 }
               }));
             }

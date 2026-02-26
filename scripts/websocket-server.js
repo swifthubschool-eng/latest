@@ -9,6 +9,8 @@ const io = new Server(httpServer, {
   cors: {
     origin: [
       "http://localhost:3000",
+      "https://latest-ti4r.onrender.com",
+      "https://latest-2jlp.onrender.com",
       "https://nifty-test-2.vercel.app",
       "https://nifty-test-2-cq10kjrai-swifthubschool-engs-projects.vercel.app"
     ],

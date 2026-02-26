@@ -7,8 +7,6 @@ function TradingViewWidget({ symbol }: { symbol: string }) {
 
   useEffect(() => {
     if (!container.current) return;
-
-    // Clear previous script if any
     container.current.innerHTML = "";
 
     const script = document.createElement("script");
@@ -17,7 +15,13 @@ function TradingViewWidget({ symbol }: { symbol: string }) {
     script.async = true;
     script.innerHTML = JSON.stringify({
       "autosize": true,
-      "symbol": `BSE:${symbol}`, // Defaulting to BSE as per previous context, or dynamic
+      "symbol":
+        symbol === "NIFTY 50" ? "NIFTY" :
+          symbol === "SENSEX" ? "SENSEX" :
+            symbol === "NIFTY BANK" ? "BANKNIFTY" :
+              symbol === "NIFTY FIN SERVICE" ? "FINNIFTY" :
+                symbol === "NIFTY 500" ? "NIFTY500" :
+                  `NSE:${symbol}`, // Force NSE for equity symbols to avoid ambiguity (e.g. IOC -> Itochu)
       "interval": "D",
       "timezone": "Asia/Kolkata",
       "theme": "dark",
